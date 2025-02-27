@@ -62,7 +62,6 @@ geopl my_file.kmz df.parquet
 ```
 
 ## Rough order (completely subject to change without notice) of future work.
-0. Organize code so it doesn't all live in main.rs
 1. Add a few calculations from GeoRust (ie area and distance) for existing df
 2. Python bindings (ie. `def read_kmz(path)->pl.DataFrame` and `geometry.area() -> Expr`)
 3. More calculations from [here](https://docs.rs/geo/latest/geo/)
