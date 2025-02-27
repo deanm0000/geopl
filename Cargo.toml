@@ -1,0 +1,14 @@
+[package]
+name = "geopl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+geo = "0.29.3"
+geo-types = "0.7.15"
+kml = {version="0.8.7", features=["zip", "geo-types"]}
+paste = "1.0.15"
+polars = {version="0.46.0", features = ["dtype-array", "strings", "dtype-date","lazy","simd", "performant","parquet"]}
+polars-arrow = "0.46.0"
+polars-core = {version="0.46.0", features=["diagonal_concat"]}
+zip = "2.2.2"
