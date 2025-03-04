@@ -82,7 +82,7 @@ df.with_columns(
 
 If you have multiple Geometry columns and want to change which column geo targets then use `geo.change_column("Other_column_name")` or if you want to do it inline, import the uninitiated class `Geo`
 
-You can also do
+This is another approach
 
 ```python
 from geopl import Geo
