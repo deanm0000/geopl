@@ -1,14 +1,12 @@
 use crate::kmz::builders::Builders;
+use crate::kmz::enums::*;
 use ::zip::read::ZipArchive;
 use kml::Kml;
 use kml::types::{Coord, Geometry, LineString, LinearRing, Placemark, Point, Polygon};
 use polars::chunked_array::builder::AnonymousListBuilder;
 use polars::prelude::*;
-use crate::kmz::enums::*;
 use std::fs::File;
 use std::io::Read;
-
-
 
 pub(crate) fn parse_point(builders: &mut Builders, point: Point) {
     builders.add_point(point, true);
@@ -77,11 +75,9 @@ pub(crate) fn parse_multigeometry(builders: &mut Builders, geoms: Vec<Geometry>,
         _ => builders.add_polygons(polygons, false),
     }
     // This is implicitly assuming that at least one type existed but it isn't checked.
-    
 
     builders.row += 1;
 }
-
 pub(crate) fn parse_geometry(builders: &mut Builders, geometry: Geometry, add_row: bool) {
     match geometry {
         Geometry::Point(point) => builders.add_point(point, add_row),
@@ -109,18 +105,16 @@ pub(crate) fn iter_elems(builders: &mut Builders, elems: Vec<Kml>) {
         .for_each(|kml| parse_kml_inner(builders, kml))
 }
 pub(crate) fn parse_kml_inner(builders: &mut Builders, kml: Kml) {
-
     match kml {
         Kml::KmlDocument(doc) => iter_elems(builders, doc.elements),
         Kml::Point(point) => parse_point(builders, point),
         Kml::Placemark(placemark) => parse_placemark(builders, placemark),
         Kml::Document { attrs: _, elements } => iter_elems(builders, elements),
-        Kml::Folder { attrs:_, elements } => {
+        Kml::Folder { attrs: _, elements } => {
             iter_elems(builders, elements);
         }
         Kml::Style(_) => {}
-        _ => {
-        }
+        _ => {}
     }
 }
 pub(crate) fn parse_kml(kml: Kml) -> DataFrame {
@@ -146,9 +140,11 @@ pub fn read_kml(kml_path: String, sink_path: Option<String>) -> DataFrame {
             };
             let kml_data: Kml = kml_string.parse().unwrap();
             let df = parse_kml(kml_data);
-            if let Some(save_path)=sink_path {
-            let file_save = File::create(save_path).unwrap();
-            ParquetWriter::new(file_save).finish(&mut df.clone()).unwrap();
+            if let Some(save_path) = sink_path {
+                let file_save = File::create(save_path).unwrap();
+                ParquetWriter::new(file_save)
+                    .finish(&mut df.clone())
+                    .unwrap();
             }
             return df;
         }

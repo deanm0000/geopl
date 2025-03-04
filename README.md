@@ -63,6 +63,9 @@ geopl my_file.kmz df.parquet
 
 ## Rough order (completely subject to change without notice) of future work.
 1. Add a few calculations from GeoRust (ie area and distance) for existing df
+a. Made polygon_fn to take a ListChunked and do polygon methods on them
+b. Need to do the same for multipolygon
+c. Then other geometries
 2. Python bindings (ie. `def read_kmz(path)->pl.DataFrame` and `geometry.area() -> Expr`)
 3. More calculations from [here](https://docs.rs/geo/latest/geo/)
 4. Proj/crs implementation
@@ -70,3 +73,99 @@ geopl my_file.kmz df.parquet
 6. Save geospatial files
 7. Query from PostGIS
 8. Insert/copy to PostGIS
+
+
+## Ramblings and some high level infrastructure
+
+The KML crate has a LinearRing geometry but geo-types doesn't have that. Should treat LinearRing as another LineString and not keep track of both.
+
+Principally what is needed is to be able to round trip from polars format to geo struct format to execute an operation and then convert it back.
+
+Complicating that issue that each operation can return a different type so I need a somewhat extensible way to go in and out of types.
+
+I created an Enum of builders to capture the varying potential builders necessary
+
+```rust
+enum Builder {
+    Pending((usize, usize)),
+    Scalar(PrimitiveChunkedBuilder<Float64Type>),
+    Point(MutableFixedSizeListArray<MutablePrimitiveArray<f64>>),
+    MultiPoint(Box<dyn ListBuilderTrait>),
+    LineString(Box<dyn ListBuilderTrait>),
+    MultiLineString(Box<dyn ListBuilderTrait>),
+    Polygon(Box<dyn ListBuilderTrait>),
+    MultiPolygon(Box<dyn ListBuilderTrait>),
+}
+```
+
+That enum can impl for new, add (taking a Geometry), and finish to yield a Series.
+
+It is used with this function
+
+```rust
+fn polygon_fn<'a, F, T>(poly_chunked: &'a ListChunked, f: F) -> Series
+where
+    F: Fn(Polygon) -> T,
+    T: Into<GeomOpResult>,
+{
+    let poly_len = poly_chunked.len();
+    let mut builder = Builder::new(poly_len);
+    poly_chunked.amortized_iter().for_each(|s1| match s1 {
+        Some(s1) => {
+            let inner_list = s1.as_ref().list().unwrap();
+            let oriented = chunked_to_polygon(inner_list);
+            builder.add(f(oriented).into());
+        }
+        None => {
+            builder.add_null();
+        }
+    });
+    builder.finish(PlSmallStr::EMPTY)
+}
+```
+
+Notice how that function takes a function as input so it's just a helper. The purpose of it is as a wrapper for the geo operations, for example:
+
+```rust
+fn geodesic_area_signed(inputs: &[Series]) -> PolarsResult<Series> {
+    let s = &inputs[0];
+    let ca_struct = s.struct_()?;
+
+    let geometries = ca_struct.fields_as_series();
+    let polygon = geometries.iter().find_map(|s| {
+        (s.name().contains("POLYGON") && !s.name().contains("MULTIPOLYGON")).then_some(s)
+    });
+
+    match polygon {
+        Some(polygon) => {
+            let poly_chunked = polygon.list()?;
+            let area = polygon_fn(poly_chunked, |poly: Polygon| poly.geodesic_area_signed());
+            Ok(area.into_series().with_name("Area".into()))
+        }
+        None => Ok(Series::full_null(
+            "Area".into(),
+            inputs[0].len(),
+            &DataType::Float64,
+        )),
+    }
+}
+```
+
+The way this is setup so far is that it would need to have more functions similar to `polygon_fn` for the other types. It would then create a result Series for each geometry in the Geometry struct and then it would need to coalesce all of those. When there is only one geometry type then it works well but if there are multiple geometry types/fields it could be problematic. If there are multiple geometry types that aren't null in any row then it just fails to give the right answer. Another idea would be to loop over all the Series of geometry types a bit like the following to create a GeometryCollection for each row. This has the benefit of only creating one result builder and it ensures that if there's ever multiple geometries it's automatically handling them.
+
+```rust
+    let s = &inputs[0];
+    let s_len = s.len();
+    let ca_struct = s.struct_()?;
+    let geometries = ca_struct.fields_as_series();
+    let mut result_builder = Builder::new(poly_len);
+    for i in 0..s_len() {
+        let geos:Vec<Geometry> = vec![];
+        for geom_series in geometries {
+            geos.push(s_to_geom(geom_series));
+        }
+        let geos=GeometryCollection::new_from(geos);
+        result_builder.add(geos.geodesic_area_signed())
+    }
+```
+

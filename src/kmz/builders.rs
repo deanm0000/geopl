@@ -1,3 +1,5 @@
+use crate::kmz::enums::*;
+use crate::kmz::parse_fn::*;
 use kml::types::{Coord, Point, Polygon};
 use paste::paste;
 use polars::chunked_array::builder::get_list_builder;
@@ -5,8 +7,6 @@ use polars::prelude::*;
 use polars_arrow::array::{
     MutableArray, MutableFixedSizeListArray, MutablePrimitiveArray, TryPush,
 };
-use crate::kmz::enums::*;
-use crate::kmz::parse_fn::*;
 macro_rules! process_finisher {
     ($self:ident, $($name:ident),*) => {
         $(
