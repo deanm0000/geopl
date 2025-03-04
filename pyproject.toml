@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0", "polars>=1.3.0"]
+build-backend = "maturin"
+
+[project]
+name = "geopl"
+requires-python = ">=3.8"
+dynamic = ["version"]
+
+[tool.maturin]
+strip = true
+python-source = "."
+features = ["pyo3/extension-module"]
+module-name = "geopl._geopl"
+
+[tool.ruff]
+line-length = 100
+fix = true
+src = ["python"]
+
+[tool.ruff.format]
+docstring-code-format = true

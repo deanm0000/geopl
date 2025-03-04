@@ -53,26 +53,59 @@ I think for most use cases it is sufficient to use EPSG codes without using an e
 
 ## What can it do RIGHT NOW?
 
-Right now, the only thing this can do is, from the command line, read a KMZ file and save it to a parquet file. It ignores all attributes and styles. It captures only geometries, names, and descriptions.
+<s>Right now, the only thing this can do is, from the command line, read a KMZ file and save it to a parquet file. It ignores all attributes and styles. It captures only geometries, names, and descriptions.</s>
 
-For example:
+Python bindings are setup with area and centroid functions.
 
-```shell
-geopl my_file.kmz df.parquet
+```python
+from geopl import geo, read_kmz
+import polars as pl
+
+df = read_kmz(some_path)
+print(df.with_columns(
+    area = geo.geodesic_area_signed(), 
+    centroid = geo.centroid()
+    ))
 ```
 
-## Rough order (completely subject to change without notice) of future work.
-1. Add a few calculations from GeoRust (ie area and distance) for existing df
+## Beginnings of real documentation
+
+The expressions are all in a class with an initialized instance called geo. It defaults to using "GEOMETRY" as the column name. This makes it easier to call expressions. For example to get the geodesic_area_signed and centroid you'd do.
+
+```python
+from geopl import geo
+df.with_columns(
+    area = geo.geodesic_area_signed(), 
+    centroid = geo.centroid()
+    )
+```
+
+If you have multiple Geometry columns and want to change which column geo targets then use `geo.change_column("Other_column_name")` or if you want to do it inline, import the uninitiated class `Geo`
+
+You can also do
+
+```python
+from geopl import Geo
+df.with_columns(
+    area = Geo("geo_col1").geodesic_area_signed(), 
+    centroid = Geo("geo_col2").centroid()
+    )
+```
+
+
+## Rough order of future work.  (completely subject to change without notice) 
+<s>1. Add a few calculations from GeoRust (ie area and distance) for existing df
 a. Made polygon_fn to take a ListChunked and do polygon methods on them
 b. Need to do the same for multipolygon
 c. Then other geometries
-2. Python bindings (ie. `def read_kmz(path)->pl.DataFrame` and `geometry.area() -> Expr`)
-3. More calculations from [here](https://docs.rs/geo/latest/geo/)
-4. Proj/crs implementation
-5. [Spatial indexes](https://docs.rs/rstar/0.12.0/rstar/struct.RTree.html#usage)/joins 
-6. Save geospatial files
-7. Query from PostGIS
-8. Insert/copy to PostGIS
+2. Python bindings (ie. `def read_kmz(path)->pl.DataFrame` and `geometry.area() -> Expr`)</s>
+* Create a rust struct with a hashmap of all the ChunkedArrays from the struct column. The key will be the column name. The value will be a tuple of the ChunkedArray, and validity bitmap. Iterate over 0..len() using value_unchecked after checking the validity bitmap (I think faster than going through Option).
+* More calculations from [here](https://docs.rs/geo/latest/geo/)
+* Proj/crs implementation
+* [Spatial indexes](https://docs.rs/rstar/0.12.0/rstar/struct.RTree.html#usage)/joins 
+* Save geospatial files
+* Query from PostGIS
+* Insert/copy to PostGIS
 
 
 ## Ramblings and some high level infrastructure

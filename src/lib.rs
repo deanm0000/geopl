@@ -9,9 +9,14 @@ use polars::prelude::*;
 use polars_arrow::array::{
     MutableArray, MutableFixedSizeListArray, MutablePrimitiveArray, TryPush,
 };
-use polars_core::utils::Container;
-use std::env;
+use polars::prelude::*;
+use pyo3::prelude::*;
+use pyo3_polars::derive::polars_expr;
+use pyo3_polars::error::PyPolarsErr;
+use pyo3_polars::{PolarsAllocator, PyDataFrame};
 
+#[global_allocator]
+static ALLOC: PolarsAllocator = PolarsAllocator::new();
 fn points_to_series(p: &[Point]) -> PolarsResult<Series> {
     let avs: Vec<AnyValue> = p
         .into_iter()
@@ -44,8 +49,19 @@ enum Builder {
     MultiPolygon(Box<dyn ListBuilderTrait>),
 }
 
+#[pyfunction]
+#[pyo3(signature=(path))]
+fn read_kmz(path: &str) -> PyResult<PyDataFrame> {
+    let df = read_kml(path.to_string(), None);
+    Ok(PyDataFrame(df))
+}
 
-
+#[pymodule]
+#[pyo3(name="_geopl")]
+fn _geopl(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(read_kmz, m)?)?;
+    Ok(())
+}
 impl Builder {
     fn new(size: usize) -> Builder {
         Builder::Pending((size, 0))
@@ -325,27 +341,29 @@ impl Builder {
         }
     }
 }
-fn main() {
-    let mut args: Vec<String> = env::args().collect();
+// fn main() {
+//     let mut args: Vec<String> = env::args().collect();
 
-    let (source, sink) = match args.len() {
-        2 => (args.remove(1), None),
-        3 => {
-            let sink = args.remove(2);
-            let source = args.remove(1);
-            (source, Some(sink))
-        }
-        _ => panic!("unsupported args"),
-    };
-    let mut df = read_kml(source, sink);
-    let geo = df.column("GEOMETRY").unwrap().as_materialized_series();
-    let area = geodesic_area_signed(&[geo.clone()]).unwrap();
-    let center = centroid(&[geo.clone()]).unwrap();
-    let df = df.with_column(area.into_column()).unwrap();
-    let df = df.with_column(center.into_column()).unwrap();
+//     let (source, sink) = match args.len() {
+//         2 => (args.remove(1), None),
+//         3 => {
+//             let sink = args.remove(2);
+//             let source = args.remove(1);
+//             (source, Some(sink))
+//         }
+//         _ => panic!("unsupported args"),
+//     };
+//     let mut df = read_kml(source, sink);
+//     let geo = df.column("GEOMETRY").unwrap().as_materialized_series();
+//     let area = geodesic_area_signed(&[geo.clone()]).unwrap();
+//     let center = centroid(&[geo.clone()]).unwrap();
+//     let df = df.with_column(area.into_column()).unwrap();
+//     let df = df.with_column(center.into_column()).unwrap();
 
-    eprintln!("{}", df);
-}
+//     eprintln!("{}", df);
+// }
+
+
 
 enum GeomOpResult {
     Null,
@@ -452,7 +470,10 @@ where
     });
     builder.finish(PlSmallStr::EMPTY)
 }
-
+pub fn float_output(fields: &[Field]) -> PolarsResult<Field> {
+    FieldsMapper::new(fields).map_to_float_dtype()
+}
+#[polars_expr(output_type_func=float_output)]
 fn geodesic_area_signed(inputs: &[Series]) -> PolarsResult<Series> {
     let s = &inputs[0];
     let ca_struct = s.struct_()?;
@@ -475,7 +496,14 @@ fn geodesic_area_signed(inputs: &[Series]) -> PolarsResult<Series> {
         )),
     }
 }
+pub fn point_2d_output(_: &[Field]) -> PolarsResult<Field> {
+    Ok(Field::new(
+        PlSmallStr::from_static("point_2d"),
+        DataType::Array(Box::new(DataType::Float64), 2),
+    ))
+}
 
+#[polars_expr(output_type_func=point_2d_output)]
 fn centroid(inputs: &[Series]) -> PolarsResult<Series> {
     let s = &inputs[0];
     let ca_struct = s.struct_()?;

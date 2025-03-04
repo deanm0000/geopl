@@ -11,4 +11,6 @@ paste = "1.0.15"
 polars = {version="0.46.0", features = ["dtype-array", "strings", "dtype-date","lazy","simd", "performant","parquet"]}
 polars-arrow = "0.46.0"
 polars-core = {version="0.46.0", features=["diagonal_concat"]}
+pyo3 = {version="0.23.5", features=["extension-module", "abi3-py38"]}
+pyo3-polars = {version="0.20.0", features=["derive"]}
 zip = "2.2.2"
