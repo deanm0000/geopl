@@ -794,6 +794,7 @@ dependencies = [
  "polars-core",
  "pyo3",
  "pyo3-polars",
+ "serde",
  "zip",
 ]
 
